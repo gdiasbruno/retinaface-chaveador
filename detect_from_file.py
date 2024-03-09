@@ -24,6 +24,9 @@ parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_thresh
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
 parser.add_argument('-s', '--save_image', action="store_true", default=True, help='show detection results')
 parser.add_argument('--vis_thres', default=0.6, type=float, help='visualization_threshold')
+parser.add_argument('--input_file', default=None, type=str, help='file with path of all input images')
+parser.add_argument('--output_file', default=None, type=str, help='path to save the file with all output predictions')
+
 args = parser.parse_args()
 
 
@@ -81,10 +84,17 @@ if __name__ == '__main__':
     net = net.to(device)
 
     resize = 1
+    output_lines = []
+    with open(args.input_file, 'r') as file:
+      lines = file.readlines()
+      index = 0
+      while index < len(lines):
+        path_from_file = lines[index].replace('\n', '')
+        face_number = lines[index + 1]
+        index += 2 + int(face_number)
+      # testing begin
 
-    # testing begin
-    for i in range(100):
-        image_path = "./curve/test.jpg"
+        image_path = '/content/drive/MyDrive/FDDB/originalPics/' + path_from_file + '.jpg'
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
         img = np.float32(img_raw)
@@ -111,8 +121,8 @@ if __name__ == '__main__':
         scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
         landms = decode_landm(landms.data.squeeze(0), prior_data, cfg['variance'])
         scale1 = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                               img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                               img.shape[3], img.shape[2]])
+                              img.shape[3], img.shape[2], img.shape[3], img.shape[2],
+                              img.shape[3], img.shape[2]])
         scale1 = scale1.to(device)
         landms = landms * scale1 / resize
         landms = landms.cpu().numpy()
@@ -143,26 +153,14 @@ if __name__ == '__main__':
         dets = np.concatenate((dets, landms), axis=1)
 
         # show image
-        if args.save_image:
-            for b in dets:
-                if b[4] < args.vis_thres:
-                    continue
-                text = "{:.4f}".format(b[4])
-                b = list(map(int, b))
-                cv2.rectangle(img_raw, (b[0], b[1]), (b[2], b[3]), (0, 0, 255), 2)
-                cx = b[0]
-                cy = b[1] + 12
-                cv2.putText(img_raw, text, (cx, cy),
-                            cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255))
+        output_lines.append(path_from_file + '\n')
+        output_lines.append(str(len(dets)) + '\n')
 
-                # landms
-                cv2.circle(img_raw, (b[5], b[6]), 1, (0, 0, 255), 4)
-                cv2.circle(img_raw, (b[7], b[8]), 1, (0, 255, 255), 4)
-                cv2.circle(img_raw, (b[9], b[10]), 1, (255, 0, 255), 4)
-                cv2.circle(img_raw, (b[11], b[12]), 1, (0, 255, 0), 4)
-                cv2.circle(img_raw, (b[13], b[14]), 1, (255, 0, 0), 4)
-            # save image
+        for b in dets:
+          output_lines.append('{} {} {} {} conf {}\n'.format(b[0], b[1], b[2], b[3], b[4]))
+    
+    with open(args.output_file, 'w') as file:
+      for line in output_lines:
+        file.write(line)
 
-            name = "test.jpg"
-            cv2.imwrite(name, img_raw)
 

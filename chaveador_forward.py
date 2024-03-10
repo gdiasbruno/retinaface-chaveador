@@ -11,8 +11,11 @@ import cv2
 from models.retinaface_chaveador import RetinaFace_chaveador
 from utils.box_utils import decode, decode_landm
 import time
+import torchvision.transforms as transforms
+import torch.nn as nn
+from PIL import Image
 
-parser = argparse.ArgumentParser(description='Retinaface')
+parser = argparse.ArgumentParser(description='RetinaFace_chaveador')
 
 parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
                     type=str, help='Trained state_dict file path to open')
@@ -90,78 +93,23 @@ if __name__ == '__main__':
       index = 0
       for path_from_file in lines:
         image_path = path_from_file.strip()
-        tic_pic = time.time() # check pic load time
-        print(image_path)
-        img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        # Define the transformation for input images
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+        ])
 
-        img = np.float32(img_raw)
+        # Load and preprocess the image
+        input_image = Image.open(image_path)
+        input_image = transform(input_image)
+        input_image = input_image.unsqueeze(0)  # Add batch dimension
+        input_image = input_image.to(device)
 
-        im_height, im_width, _ = img.shape
-        scale = torch.Tensor([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
-        img -= (104, 117, 123)
-        img = img.transpose(2, 0, 1)
-        img = torch.from_numpy(img).unsqueeze(0)
-        img = img.to(device)
-        scale = scale.to(device)
-        # print('pic load time: {:.4f}'.format(time.time() - tic_pic)) # check pic load time
+        output = net(input_image)  # forward pass
 
-        tic = time.time()
-        conf = net(img)  # forward pass
-        print('net forward time: {:.4f}'.format(time.time() - tic) + " image_path: ", image_path)
-        scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
-        print(conf.shape)
-        print(scores.shape)
+        softmax = nn.Softmax(dim=1)
+        probabilities = softmax(output)
 
-        # priorbox = PriorBox(cfg, image_size=(im_height, im_width))
-        # priors = priorbox.forward()
-        # priors = priors.to(device)
-        # prior_data = priors.data
-        # boxes = decode(loc.data.squeeze(0), prior_data, cfg['variance'])
-        # boxes = boxes * scale / resize
-        # boxes = boxes.cpu().numpy()
-        # scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
-        # landms = decode_landm(landms.data.squeeze(0), prior_data, cfg['variance'])
-        # scale1 = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-        #                       img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-        #                       img.shape[3], img.shape[2]])
-        # scale1 = scale1.to(device)
-        # landms = landms * scale1 / resize
-        # landms = landms.cpu().numpy()
-
-        # # ignore low scores
-        # inds = np.where(scores > args.confidence_threshold)[0]
-        # boxes = boxes[inds]
-        # landms = landms[inds]
-        # scores = scores[inds]
-
-        # # keep top-K before NMS
-        # order = scores.argsort()[::-1][:args.top_k]
-        # boxes = boxes[order]
-        # landms = landms[order]
-        # scores = scores[order]
-        # print(scores)
-        # # do NMS
-        # dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
-        # keep = py_cpu_nms(dets, args.nms_threshold)
-        # # keep = nms(dets, args.nms_threshold,force_cpu=args.cpu)
-        # dets = dets[keep, :]
-        # landms = landms[keep]
-
-        # # keep top-K faster NMS
-        # dets = dets[:args.keep_top_k, :]
-        # landms = landms[:args.keep_top_k, :]
-
-        # dets = np.concatenate((dets, landms), axis=1)
-
-        # show image
-        # output_lines.append(path_from_file + '\n')
-        # output_lines.append(str(len(dets)) + '\n')
-
-    #     for b in dets:
-    #       output_lines.append('{} {} {} {} conf {}\n'.format(b[0], b[1], b[2], b[3], b[4]))
-    
-    # with open(args.output_file, 'w') as file:
-    #   for line in output_lines:
-    #     file.write(line)
-
+        print("Model Output:\n", output)
+        print("Probabilities:\n", probabilities)
 
